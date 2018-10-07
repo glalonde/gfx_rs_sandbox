@@ -29,6 +29,8 @@ fn run() {
 
     let spirv = include_bytes!("../../assets/gen/shaders/compute_test.compute.spv");
     let shader = device.create_shader_module(spirv).unwrap();
+    let limits = adapter.physical_device.limits();
+    info!("Noncoherent atom size: {}", limits.non_coherent_atom_size);
 
     // Make pipeline
     let (pipeline_layout, pipeline, set_layout, mut desc_pool) = {
@@ -68,6 +70,7 @@ fn run() {
 
     let numbers = vec![1, 2, 3, 4, 5, 6, 7];
     let stride = std::mem::size_of::<u32>() as u64;
+    info!("Creating staging buffer.");
 
     // Create staging buffers, copy data.
     let (staging_buffer, staging_memory) = utils::create_buffer::<back::Backend, u32>(
@@ -78,6 +81,8 @@ fn run() {
         &numbers,
     );
 
+    info!("Creating device buffer.");
+
     // Create device buffer
     let (device_buffer, device_memory) = utils::empty_buffer::<back::Backend, u32>(
         &mut device,
@@ -86,6 +91,7 @@ fn run() {
         buffer::Usage::TRANSFER_SRC | buffer::Usage::TRANSFER_DST | buffer::Usage::STORAGE,
         numbers.len(),
     );
+    info!("Creating descriptor pool.");
 
     let desc_set = desc_pool.allocate_set(&set_layout).unwrap();
     device.write_descriptor_sets(Some(pso::DescriptorSetWrite {
@@ -94,6 +100,7 @@ fn run() {
         array_offset: 0,
         descriptors: Some(pso::Descriptor::Buffer(&device_buffer, None..None)),
     }));
+    info!("Creating command pool.");
 
     let mut command_pool =
         device.create_command_pool_typed(&queue_group, pool::CommandPoolCreateFlags::empty(), 16);

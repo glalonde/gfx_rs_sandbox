@@ -1,18 +1,20 @@
 use gfx_hal::Backend;
 use prelude::*;
 
-/// Creates an emtpy buffer of a certain type and size.
+pub struct BufferMemory<B: Backend> {
+    pub buffer: B::Buffer,
+    pub memory: B::Memory,
+    pub size: u64,
+}
+
+/// Creates an empty buffer of a certain type and size.
 pub fn empty_buffer<B: Backend, Item>(
     device: &B::Device,
     memory_types: &[MemoryType],
     properties: Properties,
     usage: buffer::Usage,
     item_count: usize,
-) -> (B::Buffer, B::Memory) {
-    // NOTE: Change Vertex -> Item
-    // NOTE: Weird issue with std -> ::std
-    // NOTE: Use passed in usage/properties
-
+) -> BufferMemory<B> {
     let item_count = item_count; // NOTE: Change
     let stride = ::std::mem::size_of::<Item>() as u64;
     let buffer_len = item_count as u64 * stride;
@@ -29,39 +31,44 @@ pub fn empty_buffer<B: Backend, Item>(
     let buffer = device
         .bind_buffer_memory(&buffer_memory, 0, unbound_buffer)
         .unwrap();
-
-    // NOTE: Move buffer fill to another function
-
-    (buffer, buffer_memory)
+    BufferMemory::<B> {
+        buffer: buffer,
+        memory: buffer_memory,
+        size: req.size,
+    }
 }
 
 /// Pushes data into a buffer.
 pub fn fill_buffer<B: Backend, Item: Copy>(
     device: &B::Device,
-    buffer_memory: &mut B::Memory,
+    buffer_memory: &mut BufferMemory<B>,
     items: &[Item],
 ) {
+    let item_count = items.len();
     let stride = ::std::mem::size_of::<Item>() as u64;
-    let buffer_len = items.len() as u64 * stride;
+    let buffer_len = item_count as u64 * stride;
+    assert!(buffer_len <= buffer_memory.size);
 
     let mut dest = device
-        .acquire_mapping_writer::<Item>(&buffer_memory, 0..buffer_len)
+        .acquire_mapping_writer::<Item>(&buffer_memory.memory, 0..buffer_memory.size)
         .unwrap();
-    dest.copy_from_slice(items);
+    dest[0..item_count].copy_from_slice(items);
     device.release_mapping_writer(dest);
 }
 
 pub fn read_buffer<B: Backend, Item: Copy>(
     device: &B::Device,
-    buffer_memory: &B::Memory,
-    items: &mut [Item],
+    buffer_memory: &mut BufferMemory<B>,
+    items: &mut Vec<Item>,
+    item_count: usize,
 ) {
     let stride = ::std::mem::size_of::<Item>() as u64;
-    let buffer_len = items.len() as u64 * stride;
+    let buffer_len = item_count as u64 * stride;
+    assert!(buffer_len <= buffer_memory.size);
     let source = device
-        .acquire_mapping_reader::<Item>(&buffer_memory, 0..buffer_len)
+        .acquire_mapping_reader::<Item>(&buffer_memory.memory, 0..buffer_memory.size)
         .unwrap();
-    items.copy_from_slice(&source);
+    items.extend_from_slice(&source[0..item_count]);
     device.release_mapping_reader(source);
 }
 
@@ -72,13 +79,13 @@ pub fn create_buffer<B: Backend, Item: Copy>(
     properties: Properties,
     usage: buffer::Usage,
     items: &[Item],
-) -> (B::Buffer, B::Memory) {
-    let (empty_buffer, mut empty_buffer_memory) =
+) -> BufferMemory<B> {
+    let mut buffer_memory =
         empty_buffer::<B, Item>(device, memory_types, properties, usage, items.len());
 
-    fill_buffer::<B, Item>(device, &mut empty_buffer_memory, items);
+    fill_buffer::<B, Item>(device, &mut buffer_memory, items);
 
-    (empty_buffer, empty_buffer_memory)
+    buffer_memory
 }
 
 /// Reinterpret an instance of T as a slice of u32s that can be uploaded as push

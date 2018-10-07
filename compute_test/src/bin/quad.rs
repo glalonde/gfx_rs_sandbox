@@ -14,8 +14,8 @@ extern crate image;
 
 extern crate winit;
 
-use sqtoy::prelude::*;
-use sqtoy::utils;
+use compute_test::prelude::*;
+use compute_test::utils;
 
 use backend::Backend;
 

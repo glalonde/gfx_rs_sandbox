@@ -13,7 +13,7 @@ extern crate gfx_hal;
 extern crate winit;
 
 // Saves us from having to import gfx types every time.
-use sqtoy::prelude::*;
+use compute_test::prelude::*;
 use winit::{Event, EventsLoop, KeyboardInput, VirtualKeyCode, WindowBuilder, WindowEvent};
 
 fn main() {
