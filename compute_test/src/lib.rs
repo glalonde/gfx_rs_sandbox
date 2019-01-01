@@ -1,6 +1,5 @@
 extern crate gfx_hal;
 
-#[macro_use]
 extern crate log;
 
 pub mod logging;

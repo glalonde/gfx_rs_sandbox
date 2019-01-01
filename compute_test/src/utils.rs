@@ -18,8 +18,8 @@ pub fn empty_buffer<B: Backend, Item>(
     let item_count = item_count; // NOTE: Change
     let stride = ::std::mem::size_of::<Item>() as u64;
     let buffer_len = item_count as u64 * stride;
-    let unbound_buffer = device.create_buffer(buffer_len, usage).unwrap();
-    let req = device.get_buffer_requirements(&unbound_buffer);
+    let mut buffer = unsafe { device.create_buffer(buffer_len, usage) }.unwrap();
+    let req = unsafe { device.get_buffer_requirements(&mut buffer) };
     let upload_type = memory_types
         .iter()
         .enumerate()
@@ -27,10 +27,8 @@ pub fn empty_buffer<B: Backend, Item>(
         .unwrap()
         .into();
 
-    let buffer_memory = device.allocate_memory(upload_type, req.size).unwrap();
-    let buffer = device
-        .bind_buffer_memory(&buffer_memory, 0, unbound_buffer)
-        .unwrap();
+    let buffer_memory = unsafe { device.allocate_memory(upload_type, req.size) }.unwrap();
+    unsafe { device.bind_buffer_memory(&buffer_memory, 0, &mut buffer) }.unwrap();
     BufferMemory::<B> {
         buffer: buffer,
         memory: buffer_memory,
@@ -48,12 +46,13 @@ pub fn fill_buffer<B: Backend, Item: Copy>(
     let stride = ::std::mem::size_of::<Item>() as u64;
     let buffer_len = item_count as u64 * stride;
     assert!(buffer_len <= buffer_memory.size);
-
-    let mut dest = device
-        .acquire_mapping_writer::<Item>(&buffer_memory.memory, 0..buffer_memory.size)
-        .unwrap();
-    dest[0..item_count].copy_from_slice(items);
-    device.release_mapping_writer(dest);
+    unsafe {
+        let mut dest = device
+            .acquire_mapping_writer::<Item>(&buffer_memory.memory, 0..buffer_memory.size)
+            .unwrap();
+        dest[0..item_count].copy_from_slice(items);
+        device.release_mapping_writer(dest).unwrap();
+    };
 }
 
 pub fn read_buffer<B: Backend, Item: Copy>(
@@ -65,11 +64,13 @@ pub fn read_buffer<B: Backend, Item: Copy>(
     let stride = ::std::mem::size_of::<Item>() as u64;
     let buffer_len = item_count as u64 * stride;
     assert!(buffer_len <= buffer_memory.size);
-    let source = device
-        .acquire_mapping_reader::<Item>(&buffer_memory.memory, 0..buffer_memory.size)
-        .unwrap();
-    items.extend_from_slice(&source[0..item_count]);
-    device.release_mapping_reader(source);
+    unsafe {
+        let source = device
+            .acquire_mapping_reader::<Item>(&buffer_memory.memory, 0..buffer_memory.size)
+            .unwrap();
+        items.extend_from_slice(&source[0..item_count]);
+        device.release_mapping_reader(source);
+    }
 }
 
 /// Creates a buffer and immediately fills it.
@@ -122,8 +123,8 @@ pub fn create_image<B: Backend>(
 ) -> (B::Image, B::Memory, B::ImageView) {
     let kind = img::Kind::D2(width, height, 1, 1);
 
-    let unbound_image = device
-        .create_image(
+    let mut image = unsafe {
+        device.create_image(
             kind,
             1,
             format,
@@ -131,9 +132,10 @@ pub fn create_image<B: Backend>(
             usage,
             ViewCapabilities::empty(),
         )
-        .expect("Failed to create unbound image");
+    }
+    .expect("Failed to create unbound image");
 
-    let image_req = device.get_image_requirements(&unbound_image);
+    let image_req = unsafe { device.get_image_requirements(&image) };
 
     let device_type = memory_types
         .iter()
@@ -145,16 +147,11 @@ pub fn create_image<B: Backend>(
         .unwrap()
         .into();
 
-    let image_memory = device
-        .allocate_memory(device_type, image_req.size)
-        .expect("Failed to allocate image");
+    let image_memory = unsafe { device.allocate_memory(device_type, image_req.size) }.unwrap();
 
-    let image = device
-        .bind_image_memory(&image_memory, 0, unbound_image)
-        .expect("Failed to bind image");
-
-    let image_view = device
-        .create_image_view(
+    unsafe { device.bind_image_memory(&image_memory, 0, &mut image) }.unwrap();
+    let image_view = unsafe {
+        device.create_image_view(
             &image,
             img::ViewKind::D2,
             format,
@@ -165,7 +162,8 @@ pub fn create_image<B: Backend>(
                 layers: 0..1,
             },
         )
-        .expect("Failed to create image view");
+    }
+    .unwrap();
 
     (image, image_memory, image_view)
 }

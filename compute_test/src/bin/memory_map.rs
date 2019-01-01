@@ -12,7 +12,7 @@ use hal::{Compute, Device, Instance, PhysicalDevice, QueueFamily};
 
 fn run() {
     let instance = back::Instance::create("gfx-rs compute", 1);
-    let mut adapter = instance
+    let adapter = instance
         .enumerate_adapters()
         .into_iter()
         .find(|a| {
@@ -59,8 +59,10 @@ fn run() {
         assert!(x.0 == x.1);
     }
 
-    device.destroy_buffer(buffer_memory.buffer);
-    device.free_memory(buffer_memory.memory);
+    unsafe {
+        device.destroy_buffer(buffer_memory.buffer);
+        device.free_memory(buffer_memory.memory);
+    }
 }
 
 fn main() {
